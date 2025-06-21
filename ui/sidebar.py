@@ -3,9 +3,11 @@ import time
 from core.services import course_manager_service, document_processor_service
 
 def _safe_course_name(name):
+    """Tạo tên hợp lệ cho collection, loại bỏ ký tự đặc biệt."""
     return "".join(c for c in name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_').lower()
 
 def display_sidebar():
+    """Vẽ toàn bộ nội dung của sidebar và xử lý logic của nó."""
     with st.sidebar:
         st.title("📝 PNote")
         st.markdown("---")
@@ -32,10 +34,30 @@ def display_sidebar():
             try:
                 current_index = st.session_state.courses.index(st.session_state.current_course)
             except (ValueError, TypeError): current_index = 0
+            
             selected_course = st.selectbox("Chọn khóa học", options=st.session_state.courses, index=current_index, label_visibility="collapsed")
             if selected_course != st.session_state.current_course:
                 st.session_state.current_course = selected_course
                 st.rerun()
+            
+            # --- Chức năng Xóa Khóa học ---
+            with st.expander("⚠️ Tùy chọn nâng cao"):
+                st.warning("Hành động này không thể hoàn tác!")
+                if st.button("Xóa Khóa Học Hiện Tại", use_container_width=True, type="primary"):
+                    course_to_delete = st.session_state.current_course
+                    # Xóa khỏi ChromaDB
+                    success, message = course_manager_service.delete_course(course_to_delete)
+                    if success:
+                        # Xóa khỏi session state
+                        st.session_state.courses.remove(course_to_delete)
+                        del st.session_state.messages[course_to_delete]
+                        del st.session_state.notes[course_to_delete]
+                        st.session_state.current_course = st.session_state.courses[0] if st.session_state.courses else None
+                        st.success(message)
+                        time.sleep(1); st.rerun()
+                    else:
+                        st.error(message)
+
         else:
             st.info("Tạo một khóa học để bắt đầu.")
 
@@ -43,7 +65,6 @@ def display_sidebar():
 
         if st.session_state.current_course:
             st.header(f"➕ Thêm tài liệu", anchor=False)
-            # ĐÃ SỬA: Cho phép upload nhiều file
             uploaded_files = st.file_uploader("1. Tải file (PDF, DOCX)", type=["pdf", "docx"], accept_multiple_files=True)
             url_input = st.text_input("2. Nhập URL (bài báo, YouTube)", placeholder="https://...")
             pasted_text = st.text_area("3. Dán văn bản vào đây", placeholder="Dán nội dung từ clipboard...")
@@ -51,7 +72,6 @@ def display_sidebar():
             if st.button("Xử lý và Thêm", use_container_width=True):
                 with st.spinner("⏳ Đang xử lý..."):
                     processed_count = 0
-                    # ĐÃ SỬA: Logic xử lý nhiều file và các nguồn khác
                     if uploaded_files:
                         for file in uploaded_files:
                             file_type = file.name.split('.')[-1]
@@ -72,10 +92,18 @@ def display_sidebar():
                     
                     if processed_count > 0:
                         st.success(f"Hoàn tất! Đã thêm thành công {processed_count} nguồn tài liệu.")
-                        # ĐÃ SỬA: Thêm sleep và rerun để giải quyết dứt điểm lỗi state
-                        time.sleep(1)
-                        st.rerun()
+                        time.sleep(1); st.rerun()
                     else:
                         st.warning("Không có tài liệu nào hợp lệ để xử lý.")
         
-        # ... (Phần Giao diện / Dark Mode giữ nguyên)
+        st.markdown("---")
+        st.header("🎨 Giao diện", anchor=False)
+
+        if 'theme' not in st.session_state:
+            st.session_state.theme = 'dark'
+
+        is_dark = st.toggle("Chế độ Tối", value=(st.session_state.theme == 'dark'))
+        
+        js_code = f'<script>document.body.classList.{"add" if is_dark else "remove"}("dark-mode");</script>'
+        st.markdown(js_code, unsafe_allow_html=True)
+        st.session_state.theme = 'dark' if is_dark else 'light'
