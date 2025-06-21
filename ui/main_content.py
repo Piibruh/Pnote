@@ -7,43 +7,36 @@ def display_main_content():
         st.info("👈 Vui lòng chọn hoặc tạo một khóa học ở thanh bên để bắt đầu.")
         return
 
-    # Khởi tạo các state cần thiết cho khóa học hiện tại
+    # Khởi tạo các state cần thiết cho khóa học hiện tại nếu chưa có
     if st.session_state.current_course not in st.session_state.messages:
         st.session_state.messages[st.session_state.current_course] = [{"role": "assistant", "content": "Xin chào! Tôi sẵn sàng trả lời các câu hỏi về tài liệu của bạn."}]
     if st.session_state.current_course not in st.session_state.notes:
         st.session_state.notes[st.session_state.current_course] = ""
 
-    # Tái cấu trúc giao diện thành 2 cột chính: Chat (rộng hơn) và Note/Tools
+    # Tái cấu trúc giao diện thành 2 cột chính: Chat và Công cụ
     chat_col, tools_col = st.columns([2, 1])
 
-    # --- CỘT CHAT (BÊN TRÁI) ---
     with chat_col:
         st.header(f"💬 Chat: {st.session_state.current_course}", anchor=False, divider="gray")
-
-        # Khung chứa tin nhắn, đặt chiều cao cố định để có thanh cuộn
         chat_container = st.container(height=600, border=False)
         with chat_container:
             for message in st.session_state.messages[st.session_state.current_course]:
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
         
-        # Khung nhập liệu nằm bên dưới
         if prompt := st.chat_input("Hỏi PNote điều gì đó..."):
             st.session_state.messages[st.session_state.current_course].append({"role": "user", "content": prompt})
-            with chat_container: # Vẽ lại tin nhắn người dùng ngay lập tức
+            with chat_container:
                 with st.chat_message("user"):
                     st.markdown(prompt)
             
-            # Xử lý và nhận câu trả lời từ bot
             with chat_container:
                  with st.chat_message("assistant"):
                     with st.spinner("PNote đang suy nghĩ..."):
                         response = rag_service.get_answer(st.session_state.current_course, prompt)
                         st.markdown(response)
             st.session_state.messages[st.session_state.current_course].append({"role": "assistant", "content": response})
-            # Không cần rerun vì Streamlit tự xử lý state của chat_message
 
-    # --- CỘT CÔNG CỤ (NOTE VÀ DỊCH THUẬT - BÊN PHẢI) ---
     with tools_col:
         st.header("🗒️ Ghi chú", anchor=False, divider="gray")
         
