@@ -1,7 +1,10 @@
-# Ghi chú: "Bộ não" của ứng dụng, chứa toàn bộ logic không liên quan đến giao diện.
+# Ghi chú: "Bộ não" của ứng dụng. File này chứa toàn bộ logic xử lý dữ liệu và AI.
+# Nó được thiết kế để hoàn toàn độc lập với giao diện người dùng (không import streamlit).
 
 # ==============================================================================
 # ĐOẠN CODE "SILVER BULLET" ĐỂ SỬA LỖI SQLITE3 TRÊN STREAMLIT CLOUD
+# Đoạn code này phải được đặt ở ĐẦU TIÊN, trước tất cả các import khác.
+# Nó ép buộc Python sử dụng phiên bản SQLite mới mà chúng ta đã cài qua requirements.txt.
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
@@ -10,7 +13,6 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import google.generativeai as genai
 import chromadb
 from pypdf import PdfReader
-# ... (các import khác không thay đổi)
 import docx
 import requests
 from bs4 import BeautifulSoup
@@ -22,34 +24,102 @@ from config import (
     TEXT_CHUNK_OVERLAP, VECTOR_DB_SEARCH_RESULTS, CHROMA_DB_PATH
 )
 
-# ... (Khởi tạo dịch vụ và class DocumentProcessor, CourseManager không thay đổi)
+# --- Khởi tạo các dịch vụ toàn cục mà ứng dụng sẽ sử dụng ---
 genai.configure(api_key=GEMINI_API_KEY)
 chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 generative_model = genai.GenerativeModel(GENERATIVE_MODEL_NAME)
 
 class DocumentProcessor:
-    # ... (Nội dung class này giữ nguyên)
-    pass
+    """
+    Ghi chú: Lớp này chịu trách nhiệm duy nhất cho việc trích xuất văn bản thô
+    từ các nguồn khác nhau (PDF, DOCX, URL, YouTube, Text).
+    """
+    def extract_text(self, source_type, source_data):
+        try:
+            if source_type in ['pdf', 'docx', 'text'] and not source_data:
+                return None, "Không có dữ liệu nào được cung cấp."
+            
+            if source_type == 'pdf':
+                reader = PdfReader(source_data)
+                text = "".join(page.extract_text() + "\n" for page in reader.pages if page.extract_text())
+                return text, source_data.name
+            
+            elif source_type == 'docx':
+                doc = docx.Document(source_data)
+                text = "\n".join([para.text for para in doc.paragraphs if para.text])
+                return text, source_data.name
+            
+            elif source_type == 'text':
+                return source_data, "Pasted Text"
+                
+            elif source_type == 'url':
+                if not source_data: return None, "URL không được cung cấp."
+                
+                if "youtube.com/watch?v=" in source_data or "youtu.be/" in source_data:
+                    video_id = source_data.split("v=")[-1].split('&')[0]
+                    if "/" in video_id: video_id = video_id.split("/")[-1]
+                    transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['vi', 'en'])
+                    text = " ".join([item['text'] for item in transcript_list])
+                    return text, f"YouTube Video ID: {video_id}"
+
+                response = requests.get(source_data, headers={'User-Agent': 'Mozilla/5.0'})
+                soup = BeautifulSoup(response.content, 'html.parser')
+                for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
+                    tag.decompose()
+                text = ' '.join(t.get_text(separator=' ', strip=True) for t in soup.find_all(text=True))
+                title = soup.title.string.strip() if soup.title else source_data
+                return text, title
+                
+        except Exception as e:
+            return None, f"Lỗi khi xử lý nguồn: {str(e)}"
+        return None, "Loại nguồn không được hỗ trợ."
 
 class CourseManager:
-    # ... (Nội dung class này giữ nguyên)
-    pass
+    """
+    Ghi chú: Lớp này quản lý việc tương tác với database vector (ChromaDB).
+    Nó xử lý việc tạo khóa học (collection), thêm tài liệu (add documents),
+    và liệt kê các khóa học đã có.
+    """
+    def __init__(self, client):
+        self.client = client
+
+    def list_courses(self):
+        return [col.name for col in self.client.list_collections()]
+
+    def get_or_create_course_collection(self, course_id):
+        return self.client.get_or_create_collection(name=course_id)
+
+    def add_document(self, course_id, document_text, source_name):
+        collection = self.get_or_create_course_collection(course_id)
+        chunks = self._split_text(document_text)
+        if not chunks: return 0
+        doc_ids = [f"{course_id}_{source_name}_{i}_{time.time()}" for i in range(len(chunks))]
+        collection.add(documents=chunks, ids=doc_ids)
+        return len(chunks)
+
+    def _split_text(self, text):
+        tokenizer = tiktoken.get_encoding("cl100k_base")
+        tokens = tokenizer.encode(text)
+        chunks = []
+        for i in range(0, len(tokens), TEXT_CHUNK_SIZE - TEXT_CHUNK_OVERLAP):
+            chunk_tokens = tokens[i:i + TEXT_CHUNK_SIZE]
+            chunks.append(tokenizer.decode(chunk_tokens))
+        return chunks
 
 class RAGService:
-    """Dịch vụ thực hiện pipeline RAG và các tác vụ AI khác."""
+    """
+    Ghi chú: Lớp này chứa các logic nghiệp vụ liên quan đến AI,
+    bao gồm pipeline RAG (hỏi-đáp) và dịch thuật.
+    """
     def __init__(self, course_manager):
         self.course_manager = course_manager
 
     def get_answer(self, course_id, question):
-        """Hàm trả lời câu hỏi đã được sửa lỗi logic."""
         try:
-            # ĐÃ SỬA: Dùng get_collection thay vì get_or_create để đảm bảo collection đã tồn tại.
-            # Điều này sẽ báo lỗi ngay nếu có vấn đề với tên khóa học.
+            # Dùng get_collection để đảm bảo khóa học đã tồn tại và có dữ liệu.
             collection = self.course_manager.client.get_collection(name=course_id)
-            
-            # Kiểm tra số lượng tài liệu một lần nữa để chắc chắn
             if collection.count() == 0:
-                return "Tài liệu đã được thêm, nhưng có vẻ như đang được xử lý. Vui lòng thử lại sau ít phút hoặc thêm lại tài liệu nếu sự cố vẫn tiếp diễn."
+                return "Lỗi logic: Khóa học tồn tại nhưng không có dữ liệu. Vui lòng thử thêm lại tài liệu."
         
             results = collection.query(query_texts=[question], n_results=VECTOR_DB_SEARCH_RESULTS)
             context_chunks = results['documents'][0]
@@ -64,16 +134,20 @@ class RAGService:
             return response.text
         
         except ValueError:
-            # Lỗi này xảy ra khi get_collection không tìm thấy khóa học.
-            return "Lỗi: Không tìm thấy khóa học này. Có thể nó chưa được tạo hoặc chưa có tài liệu nào."
+            return "Lỗi: Không tìm thấy khóa học này hoặc khóa học chưa có tài liệu nào. Vui lòng kiểm tra lại."
         except Exception as e:
             return f"Đã xảy ra một lỗi không mong muốn khi truy vấn: {str(e)}"
 
     def translate_text(self, text_to_translate, target_language="Tiếng Việt"):
-        # ... (nội dung hàm này giữ nguyên)
-        pass
+        if not text_to_translate: return ""
+        prompt = f"Translate the following text to {target_language}. Respond with only the translated text, no additional explanations:\n\n{text_to_translate}"
+        try:
+            response = generative_model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            return f"Lỗi dịch thuật: {e}"
 
-# ... (Khởi tạo các instance không thay đổi)
+# Khởi tạo các instance của services để các module khác import
 document_processor_service = DocumentProcessor()
 course_manager_service = CourseManager(chroma_client)
 rag_service = RAGService(course_manager_service)
