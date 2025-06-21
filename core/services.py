@@ -2,6 +2,7 @@
 
 # ==============================================================================
 # ĐOẠN CODE "SILVER BULLET" ĐỂ SỬA LỖI SQLITE3 TRÊN STREAMLIT CLOUD
+# Đoạn code này phải được đặt ở ĐẦU TIÊN, trước tất cả các import khác.
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
@@ -9,7 +10,6 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 import google.generativeai as genai
 import chromadb
-# ... (các import khác không đổi)
 from pypdf import PdfReader
 import docx
 import requests
@@ -23,19 +23,16 @@ from config import (
 )
 
 # --- Khởi tạo các dịch vụ toàn cục ---
-# ... (phần này không đổi)
 genai.configure(api_key=GEMINI_API_KEY)
 chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 generative_model = genai.GenerativeModel(GENERATIVE_MODEL_NAME)
-
 
 class DocumentProcessor:
     """Xử lý việc trích xuất văn bản từ nhiều nguồn khác nhau."""
     def extract_text(self, source_type, source_data):
         try:
-            # ... (toàn bộ nội dung class này không đổi, chỉ thêm case 'text' ở dưới)
-            if source_type in ['pdf', 'docx'] and not source_data:
-                return None, "Không có file nào được cung cấp."
+            if source_type in ['pdf', 'docx', 'text'] and not source_data:
+                return None, "Không có dữ liệu nào được cung cấp."
             
             if source_type == 'pdf':
                 reader = PdfReader(source_data)
@@ -47,13 +44,10 @@ class DocumentProcessor:
                 text = "\n".join([para.text for para in doc.paragraphs if para.text])
                 return text, source_data.name
             
-            # BỔ SUNG: Xử lý nguồn từ văn bản dán vào
             elif source_type == 'text':
-                if not source_data: return None, "Không có văn bản nào được dán vào."
                 return source_data, "Pasted Text"
                 
             elif source_type == 'url':
-                # ... (phần xử lý url và youtube không đổi)
                 if not source_data: return None, "URL không được cung cấp."
                 
                 if "youtube.com/watch?v=" in source_data or "youtu.be/" in source_data:
@@ -77,32 +71,54 @@ class DocumentProcessor:
         return None, "Loại nguồn không được hỗ trợ."
 
 class CourseManager:
-    # ... (Toàn bộ nội dung class này không thay đổi)
     def __init__(self, client):
         self.client = client
-    # ...
+
+    def list_courses(self):
+        return [col.name for col in self.client.list_collections()]
+
+    def get_or_create_course_collection(self, course_id):
+        return self.client.get_or_create_collection(name=course_id)
+
+    def add_document(self, course_id, document_text, source_name):
+        collection = self.get_or_create_course_collection(course_id)
+        chunks = self._split_text(document_text)
+        if not chunks: return 0
+        doc_ids = [f"{course_id}_{source_name}_{i}_{time.time()}" for i in range(len(chunks))]
+        collection.add(documents=chunks, ids=doc_ids)
+        return len(chunks)
+
+    def _split_text(self, text):
+        tokenizer = tiktoken.get_encoding("cl100k_base")
+        tokens = tokenizer.encode(text)
+        chunks = []
+        for i in range(0, len(tokens), TEXT_CHUNK_SIZE - TEXT_CHUNK_OVERLAP):
+            chunk_tokens = tokens[i:i + TEXT_CHUNK_SIZE]
+            chunks.append(tokenizer.decode(chunk_tokens))
+        return chunks
 
 class RAGService:
-    """Dịch vụ thực hiện pipeline RAG và các tác vụ AI khác."""
     def __init__(self, course_manager):
         self.course_manager = course_manager
 
     def get_answer(self, course_id, question):
-        # ... (nội dung hàm này không đổi)
         collection = self.course_manager.get_or_create_course_collection(course_id)
-        
         if collection.count() == 0:
              return "Lỗi: Khóa học này chưa có tài liệu nào. Vui lòng thêm tài liệu trước khi đặt câu hỏi."
+        results = collection.query(query_texts=[question], n_results=VECTOR_DB_SEARCH_RESULTS)
+        context_chunks = results['documents'][0]
+        if not context_chunks:
+            return "Tôi không tìm thấy thông tin liên quan trong tài liệu để trả lời câu hỏi của bạn."
+        context = "\n---\n".join(context_chunks)
+        prompt = f"""Bạn là PNote, trợ lý AI chuyên gia. Trả lời câu hỏi DỰA HOÀN TOÀN vào "NGỮ CẢNH" sau. QUY TẮC: 1. CHỈ dùng thông tin từ "NGỮ CẢNH". Nếu không có, nói: "Tôi không tìm thấy thông tin này trong tài liệu." 2. Trả lời trực tiếp, súc tích, chuyên nghiệp. 3. Không đưa ra ý kiến cá nhân. NGỮ CẢNH: --- {context} --- CÂU HỎI: "{question}" """
+        try:
+            response = generative_model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            return f"Lỗi khi gọi AI: {str(e)}"
 
-        # ...
-        return # ...
-    
-    # BỔ SUNG: Chức năng dịch thuật
     def translate_text(self, text_to_translate, target_language="Tiếng Việt"):
-        """Dịch văn bản bằng Gemini."""
-        if not text_to_translate:
-            return ""
-        
+        if not text_to_translate: return ""
         prompt = f"Translate the following text to {target_language}. Respond with only the translated text, no additional explanations:\n\n{text_to_translate}"
         try:
             response = generative_model.generate_content(prompt)
