@@ -1,4 +1,3 @@
-# Ghi chú: File này chỉ chứa code để vẽ thanh sidebar.
 import streamlit as st
 import time
 from core.services import course_manager_service, document_processor_service
@@ -20,7 +19,6 @@ def display_sidebar():
                 st.warning("Vui lòng nhập tên khóa học.")
             else:
                 safe_name = _safe_course_name(new_course_name_input)
-                # Kiểm tra nếu tên sau khi xử lý bị rỗng
                 if not safe_name:
                     st.error("Tên khóa học không hợp lệ. Vui lòng dùng chữ cái hoặc số.")
                 elif safe_name in st.session_state.courses:
@@ -56,7 +54,6 @@ def display_sidebar():
             if st.button("Xử lý và Thêm"):
                 with st.spinner("⏳ Đang xử lý..."):
                     source_type, source_data = (None, None)
-                    # Ưu tiên xử lý theo thứ tự: file -> url -> text
                     if uploaded_file:
                         source_type = uploaded_file.name.split('.')[-1]
                         source_data = uploaded_file
@@ -76,8 +73,7 @@ def display_sidebar():
                             st.error(f"Lỗi: {source_name}")
                     else:
                         st.warning("Vui lòng cung cấp tài liệu.")
-
-        # Phần Dark Mode, được đặt ở cuối sidebar
+        
         st.markdown("---")
         st.header("🎨 Giao diện")
 
@@ -86,9 +82,9 @@ def display_sidebar():
 
         is_dark = st.toggle("Bật Chế độ Tối", value=(st.session_state.theme == 'dark'))
         
+        js_code = f'<script>document.body.classList.{"add" if is_dark else "remove"}("dark-mode");</script>'
+        st.markdown(js_code, unsafe_allow_html=True)
         if is_dark:
             st.session_state.theme = 'dark'
-            st.markdown('<script>document.body.classList.add("dark-mode");</script>', unsafe_allow_html=True)
         else:
             st.session_state.theme = 'light'
-            st.markdown('<script>document.body.classList.remove("dark-mode");</script>', unsafe_allow_html=True)
