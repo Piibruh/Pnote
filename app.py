@@ -1,4 +1,3 @@
-# Ghi chú: Điểm khởi chạy chính, rất gọn gàng.
 import streamlit as st
 from config import GEMINI_API_KEY
 from utils.state import initialize_session_state
@@ -18,12 +17,10 @@ def main():
         layout="wide"
     )
     
-    # BỔ SUNG: Gọi hàm load_css
     load_css("styles.css")
     
-    # Kiểm tra API Key
-    if not GEMINI_API_KEY or "YOUR_API_KEY" in GEMINI_API_KEY:
-        st.error("Lỗi: API Key của Gemini chưa được cấu hình. Vui lòng kiểm tra file .env của bạn.")
+    if not GEMINI_API_KEY:
+        st.error("Lỗi: API Key của Gemini chưa được cấu hình. Vui lòng kiểm tra mục Secrets trên Streamlit Cloud hoặc file .env của bạn.")
         st.stop()
 
     try:
