@@ -1,13 +1,16 @@
 # Ghi chú: File này chứa tất cả các hằng số và cấu hình của ứng dụng.
 import os
-# Thêm 2 dòng này để đọc file .env
+import streamlit as st # Bổ sung import streamlit
+
+# Dòng load_dotenv không còn cần thiết trên server, nhưng giữ lại cũng không sao
+# vì nó giúp app vẫn chạy được ở local.
 from dotenv import load_dotenv
 load_dotenv()
 
 # --- Cấu hình API và Model ---
-# ĐÃ SỬA: Đọc API Key từ file .env một cách an toàn.
-# os.getenv sẽ tìm biến môi trường có tên 'GEMINI_API_KEY'.
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# ĐÃ SỬA: Ưu tiên đọc key từ st.secrets của Streamlit Cloud,
+# nếu không có thì mới đọc từ file .env (dành cho local).
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY"))
 
 GENERATIVE_MODEL_NAME = 'gemini-pro'
 EMBEDDING_MODEL_NAME = 'models/embedding-001'
