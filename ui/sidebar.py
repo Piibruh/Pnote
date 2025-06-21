@@ -4,6 +4,7 @@ import time
 from core.services import course_manager_service, document_processor_service
 
 def _safe_course_name(name):
+    """Tạo tên hợp lệ cho collection, loại bỏ ký tự đặc biệt."""
     return "".join(c for c in name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_').lower()
 
 def display_sidebar():
@@ -15,11 +16,11 @@ def display_sidebar():
         
         new_course_name_input = st.text_input("Tên khóa học mới", placeholder="vd: Lịch sử Đảng")
         if st.button("Tạo Khóa học"):
-            # ĐÃ SỬA: Logic kiểm tra lỗi được làm chặt chẽ hơn
             if not new_course_name_input:
                 st.warning("Vui lòng nhập tên khóa học.")
             else:
                 safe_name = _safe_course_name(new_course_name_input)
+                # Kiểm tra nếu tên sau khi xử lý bị rỗng
                 if not safe_name:
                     st.error("Tên khóa học không hợp lệ. Vui lòng dùng chữ cái hoặc số.")
                 elif safe_name in st.session_state.courses:
@@ -31,9 +32,16 @@ def display_sidebar():
                     time.sleep(1)
                     st.rerun()
 
-        # ... (phần chọn khóa học không đổi)
         if st.session_state.courses:
-            # ...
+            try:
+                current_index = st.session_state.courses.index(st.session_state.current_course)
+            except (ValueError, TypeError):
+                current_index = 0
+            
+            selected_course = st.selectbox("Chọn khóa học", options=st.session_state.courses, index=current_index)
+            if selected_course != st.session_state.current_course:
+                st.session_state.current_course = selected_course
+                st.rerun()
         else:
             st.info("Tạo khóa học để bắt đầu.")
 
@@ -43,13 +51,12 @@ def display_sidebar():
             st.header(f"➕ Thêm tài liệu")
             uploaded_file = st.file_uploader("1. Tải file (PDF, DOCX)", type=["pdf", "docx"])
             url_input = st.text_input("2. Nhập URL (bài báo, YouTube)", placeholder="https://...")
-            # BỔ SUNG: Thêm tùy chọn dán văn bản
             pasted_text = st.text_area("3. Dán văn bản vào đây")
             
             if st.button("Xử lý và Thêm"):
                 with st.spinner("⏳ Đang xử lý..."):
                     source_type, source_data = (None, None)
-                    # ĐÃ SỬA: Logic ưu tiên xử lý các nguồn
+                    # Ưu tiên xử lý theo thứ tự: file -> url -> text
                     if uploaded_file:
                         source_type = uploaded_file.name.split('.')[-1]
                         source_data = uploaded_file
@@ -70,4 +77,18 @@ def display_sidebar():
                     else:
                         st.warning("Vui lòng cung cấp tài liệu.")
 
-        # ... (phần Dark Mode không đổi)
+        # Phần Dark Mode, được đặt ở cuối sidebar
+        st.markdown("---")
+        st.header("🎨 Giao diện")
+
+        if 'theme' not in st.session_state:
+            st.session_state.theme = 'light'
+
+        is_dark = st.toggle("Bật Chế độ Tối", value=(st.session_state.theme == 'dark'))
+        
+        if is_dark:
+            st.session_state.theme = 'dark'
+            st.markdown('<script>document.body.classList.add("dark-mode");</script>', unsafe_allow_html=True)
+        else:
+            st.session_state.theme = 'light'
+            st.markdown('<script>document.body.classList.remove("dark-mode");</script>', unsafe_allow_html=True)
