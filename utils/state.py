@@ -1,4 +1,3 @@
-# Ghi chú: Quản lý trạng thái của ứng dụng một cách tập trung.
 import streamlit as st
 from core.services import course_manager_service
 
