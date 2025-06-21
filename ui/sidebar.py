@@ -11,15 +11,19 @@ def display_sidebar():
     with st.sidebar:
         st.title("📝 PNote")
         st.markdown("---")
-        st.header("📚 Quản lý Khóa học")
+        # BỔ SUNG: Thêm icon vào header
+        st.header("📚 Quản lý Khóa học", anchor=False)
         
-        new_course_name_input = st.text_input("Tên khóa học mới", placeholder="vd: Lịch sử Đảng")
+        new_course_name_input = st.text_input("Tên khóa học mới", placeholder="vd: Lập trình Python")
         if st.button("Tạo Khóa học"):
             if not new_course_name_input:
                 st.warning("Vui lòng nhập tên khóa học.")
             else:
                 safe_name = _safe_course_name(new_course_name_input)
-                if not safe_name:
+                # ĐÃ SỬA: Thêm điều kiện kiểm tra độ dài tên khóa học
+                if len(safe_name) < 3:
+                    st.error("Lỗi: Tên khóa học phải có ít nhất 3 ký tự (chữ hoặc số).")
+                elif not safe_name:
                     st.error("Tên khóa học không hợp lệ. Vui lòng dùng chữ cái hoặc số.")
                 elif safe_name in st.session_state.courses:
                     st.warning(f"Khóa học '{safe_name}' đã tồn tại.")
@@ -36,17 +40,18 @@ def display_sidebar():
             except (ValueError, TypeError):
                 current_index = 0
             
-            selected_course = st.selectbox("Chọn khóa học", options=st.session_state.courses, index=current_index)
+            selected_course = st.selectbox("Chọn khóa học", options=st.session_state.courses, index=current_index, label_visibility="collapsed")
             if selected_course != st.session_state.current_course:
                 st.session_state.current_course = selected_course
                 st.rerun()
         else:
-            st.info("Tạo khóa học để bắt đầu.")
+            st.info("Tạo một khóa học để bắt đầu.")
 
         st.markdown("---")
 
         if st.session_state.current_course:
-            st.header(f"➕ Thêm tài liệu")
+            # BỔ SUNG: Thêm icon vào header
+            st.header(f"➕ Thêm tài liệu", anchor=False)
             uploaded_file = st.file_uploader("1. Tải file (PDF, DOCX)", type=["pdf", "docx"])
             url_input = st.text_input("2. Nhập URL (bài báo, YouTube)", placeholder="https://...")
             pasted_text = st.text_area("3. Dán văn bản vào đây")
@@ -55,32 +60,30 @@ def display_sidebar():
                 with st.spinner("⏳ Đang xử lý..."):
                     source_type, source_data = (None, None)
                     if uploaded_file:
-                        source_type = uploaded_file.name.split('.')[-1]
-                        source_data = uploaded_file
+                        source_type = uploaded_file.name.split('.')[-1]; source_data = uploaded_file
                     elif url_input:
-                        source_type = 'url'
-                        source_data = url_input
+                        source_type = 'url'; source_data = url_input
                     elif pasted_text:
-                        source_type = 'text'
-                        source_data = pasted_text
+                        source_type = 'text'; source_data = pasted_text
                     
                     if source_type and source_data:
                         text, source_name = document_processor_service.extract_text(source_type, source_data)
                         if text:
                             chunks_added = course_manager_service.add_document(st.session_state.current_course, text, source_name)
                             st.success(f"Đã thêm {chunks_added} kiến thức từ '{source_name}'.")
-                        else:
-                            st.error(f"Lỗi: {source_name}")
+                        else: st.error(f"Lỗi: {source_name}")
                     else:
                         st.warning("Vui lòng cung cấp tài liệu.")
         
         st.markdown("---")
-        st.header("🎨 Giao diện")
+        # BỔ SUNG: Thêm icon vào header
+        st.header("🎨 Giao diện", anchor=False)
 
+        # Đặt Dark Mode làm mặc định
         if 'theme' not in st.session_state:
-            st.session_state.theme = 'light'
+            st.session_state.theme = 'dark'
 
-        is_dark = st.toggle("Bật Chế độ Tối", value=(st.session_state.theme == 'dark'))
+        is_dark = st.toggle("Chế độ Tối", value=(st.session_state.theme == 'dark'))
         
         js_code = f'<script>document.body.classList.{"add" if is_dark else "remove"}("dark-mode");</script>'
         st.markdown(js_code, unsafe_allow_html=True)
