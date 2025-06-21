@@ -4,11 +4,13 @@ import time
 from core.services import course_manager_service, document_processor_service
 
 def _safe_course_name(name):
+    # ... (nội dung hàm này không đổi)
     return "".join(c for c in name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_').lower()
 
 def display_sidebar():
     """Vẽ toàn bộ nội dung của sidebar và xử lý logic của nó."""
     with st.sidebar:
+        # ... (toàn bộ phần code quản lý khóa học và thêm tài liệu không đổi)
         st.title("📝 PNote")
         st.markdown("---")
         st.header("📚 Quản lý Khóa học")
@@ -43,7 +45,6 @@ def display_sidebar():
 
         if st.session_state.current_course:
             st.header(f"➕ Thêm tài liệu")
-            # ĐÃ SỬA: Chấp nhận cả PDF và DOCX
             uploaded_file = st.file_uploader("1. Tải file (PDF, DOCX)", type=["pdf", "docx"])
             url_input = st.text_input("2. Nhập URL (bài báo, YouTube)", placeholder="https://...")
             
@@ -66,3 +67,22 @@ def display_sidebar():
                             st.error(f"Lỗi: {source_name}")
                     else:
                         st.warning("Vui lòng cung cấp tài liệu.")
+
+        # --- BỔ SUNG PHẦN DARK MODE ---
+        st.markdown("---")
+        st.header("🎨 Giao diện")
+
+        # Khởi tạo theme nếu chưa có
+        if 'theme' not in st.session_state:
+            st.session_state.theme = 'light'
+
+        # Nút bật/tắt Dark Mode
+        is_dark = st.toggle("Bật Chế độ Tối", value=(st.session_state.theme == 'dark'))
+        
+        # Dùng JavaScript để thêm/xóa class "dark-mode" vào body của trang web
+        if is_dark:
+            st.session_state.theme = 'dark'
+            st.markdown('<script>document.body.classList.add("dark-mode");</script>', unsafe_allow_html=True)
+        else:
+            st.session_state.theme = 'light'
+            st.markdown('<script>document.body.classList.remove("dark-mode");</script>', unsafe_allow_html=True)
